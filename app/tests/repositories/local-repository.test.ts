@@ -113,6 +113,19 @@ describe("local repository", () => {
     await expect(repository.listRequests({ status: "PARTIALLY_ALLOCATED" })).resolves.toHaveLength(1);
   });
 
+  it("ships through the repository with exactly one matching shipment row", async () => {
+    const db = createTestDatabase();
+    runMigrations(db);
+    seedRequestAndInventory(db);
+    const repository = createLocalRepository(db);
+    await repository.allocate({ id: "A-1", requestId: "REQ-1", modelCode: "MODEL-A", serialNumber: "SN-001" });
+
+    await repository.ship({ id: "S-1", allocationId: "A-1", shippedAt: "2026-09-17", revenue: 0 });
+
+    expect(db.prepare("SELECT status FROM allocations WHERE id = 'A-1'").get()).toEqual({ status: "SHIPPED" });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM shipments WHERE allocation_id = 'A-1'").get()).toEqual({ count: 1 });
+  });
+
   it("rejects inventory imports that would reduce total below active allocations", async () => {
     const db = createTestDatabase();
     runMigrations(db);

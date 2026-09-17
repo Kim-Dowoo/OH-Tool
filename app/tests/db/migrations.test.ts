@@ -117,4 +117,33 @@ describe("initial SQLite migration", () => {
 
     expect(() => db.prepare("UPDATE allocations SET model_code = 'MODEL-B' WHERE id = 'A-1'").run()).toThrow();
   });
+
+  it("requires a shipment before direct status changes and rejects shipment rows for nonshipping allocations", () => {
+    const db = createTestDatabase();
+    runMigrations(db);
+    seedRequestAndInventory(db);
+    createAllocation(db, { id: "A-1", requestId: "REQ-1", modelCode: "MODEL-A", serialNumber: "SN-001" });
+
+    expect(() => db.prepare("UPDATE allocations SET status = 'SHIPPED' WHERE id = 'A-1'").run()).toThrow();
+    db.prepare(
+      "UPDATE allocations SET status = 'CANCELLED', cancel_reason = 'cancelled for test' WHERE id = 'A-1'",
+    ).run();
+    expect(() => db.prepare(
+      `INSERT INTO shipments (id, allocation_id, shipped_at, revenue, created_at)
+       VALUES ('S-1', 'A-1', '2026-09-17', 0, '2026-09-17T00:00:00.000Z')`,
+    ).run()).toThrow();
+  });
+
+  it("prevents a shipped allocation from reverting or losing its shipment", async () => {
+    const db = createTestDatabase();
+    runMigrations(db);
+    seedRequestAndInventory(db);
+    const { createLocalRepository } = await import("@/lib/repositories/local-repository");
+    const repository = createLocalRepository(db);
+    await repository.allocate({ id: "A-1", requestId: "REQ-1", modelCode: "MODEL-A", serialNumber: "SN-001" });
+    await repository.ship({ id: "S-1", allocationId: "A-1", shippedAt: "2026-09-17", revenue: 0 });
+
+    expect(() => db.prepare("UPDATE allocations SET status = 'ALLOCATED' WHERE id = 'A-1'").run()).toThrow();
+    expect(() => db.prepare("DELETE FROM shipments WHERE id = 'S-1'").run()).toThrow();
+  });
 });

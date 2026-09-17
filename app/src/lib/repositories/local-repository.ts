@@ -340,7 +340,6 @@ export function createLocalRepository(db: Database.Database): OhRepository {
           `INSERT INTO shipments (id, allocation_id, shipped_at, revenue, note, created_at)
            VALUES (?, ?, ?, ?, ?, ?)`,
         ).run(id, input.allocationId, input.shippedAt, input.revenue, input.note ?? null, createdAt);
-        db.prepare("UPDATE allocations SET status = 'SHIPPED' WHERE id = ?").run(input.allocationId);
 
         const request = db.prepare("SELECT quantity FROM requests WHERE id = ?").get(allocation.request_id) as SqlRow;
         const shipped = db.prepare(
