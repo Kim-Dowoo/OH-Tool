@@ -1,0 +1,27 @@
+# Workspaces and orchestration
+.worktrees/
+.superpowers/
+_work/
+
+# Local-only business data
+input-samples/*.xlsx
+data/**
+!data/.gitkeep
+backups/**
+!backups/.gitkeep
+exports/**
+!exports/.gitkeep
+
+# Secrets and local platform state
+.env
+.env.*
+!.env.example
+.vercel/
+
+# Node and test outputs
+app/node_modules/
+app/.next/
+app/coverage/
+app/test-results/
+app/playwright-report/
+
