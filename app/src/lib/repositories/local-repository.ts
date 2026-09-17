@@ -64,6 +64,7 @@ function asAllocation(row: SqlRow): AllocationRecord {
     status: String(row.status) as AllocationRecord["status"],
     allocatedAt: String(row.allocated_at),
     cancelledAt: asNullableString(row.cancelled_at),
+    cancelReason: asNullableString(row.cancel_reason),
   };
 }
 
@@ -176,21 +177,29 @@ export function createLocalRepository(db: Database.Database): OhRepository {
 
         if (input.importType === "ORGANIZATION") {
           const upsertOrganization = db.prepare(
-            `INSERT INTO organization_mappings (team_raw, department_name, team_name, sales_rep_email, updated_at)
-             VALUES (?, ?, ?, ?, ?)
+            `INSERT INTO organization_mappings
+              (team_raw, department_name, team_name, sales_rep, sales_rep_email, active, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(team_raw) DO UPDATE SET
                department_name = excluded.department_name,
                team_name = excluded.team_name,
+               sales_rep = excluded.sales_rep,
                sales_rep_email = excluded.sales_rep_email,
+               active = excluded.active,
                updated_at = excluded.updated_at`,
           );
           const upsertPartner = db.prepare(
-            `INSERT INTO partners (partner_code, partner_name, sales_rep, sales_rep_email, updated_at)
-             VALUES (?, ?, ?, ?, ?)
+            `INSERT INTO partners
+              (partner_code, partner_name, team_raw, department_name, team_name, sales_rep, sales_rep_email, active, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(partner_code) DO UPDATE SET
                partner_name = excluded.partner_name,
+               team_raw = excluded.team_raw,
+               department_name = excluded.department_name,
+               team_name = excluded.team_name,
                sales_rep = excluded.sales_rep,
                sales_rep_email = excluded.sales_rep_email,
+               active = excluded.active,
                updated_at = excluded.updated_at`,
           );
           for (const organization of input.organizations ?? []) {
@@ -198,15 +207,21 @@ export function createLocalRepository(db: Database.Database): OhRepository {
               organization.teamRaw,
               organization.departmentName,
               organization.teamName,
+              organization.salesRep ?? null,
               organization.salesRepEmail ?? null,
+              organization.active === false ? 0 : 1,
               createdAt,
             );
             if (organization.partnerCode && organization.partnerName && organization.salesRep) {
               upsertPartner.run(
                 organization.partnerCode,
                 organization.partnerName,
+                organization.teamRaw,
+                organization.departmentName,
+                organization.teamName,
                 organization.salesRep,
                 organization.salesRepEmail ?? null,
+                organization.partnerActive === false ? 0 : 1,
                 createdAt,
               );
             }
@@ -252,9 +267,20 @@ export function createLocalRepository(db: Database.Database): OhRepository {
     async allocate(input: AllocateInput): Promise<AllocationRecord> {
       if (input.serialNumber.trim() === "") throw new Error("SN은 비워 둘 수 없습니다.");
       const allocation = db.transaction(() => {
-        const request = db.prepare("SELECT requested_model FROM requests WHERE id = ?").get(input.requestId) as SqlRow | undefined;
+        const request = db.prepare(
+          "SELECT requested_model, quantity, status FROM requests WHERE id = ?",
+        ).get(input.requestId) as SqlRow | undefined;
         if (!request) throw new Error("요청을 찾을 수 없습니다.");
         if (request.requested_model !== input.modelCode) throw new Error("요청 기종과 배정 기종이 일치하지 않습니다.");
+        if (request.status === "SHIPPED" || request.status === "CANCELLED") {
+          throw new Error("종료된 요청에는 배정할 수 없습니다.");
+        }
+        const requestAllocationCount = db.prepare(
+          "SELECT COUNT(*) AS count FROM allocations WHERE request_id = ? AND status IN ('ALLOCATED', 'SHIPPED')",
+        ).get(input.requestId) as SqlRow;
+        if (Number(requestAllocationCount.count) >= Number(request.quantity)) {
+          throw new Error("요청 수량을 초과하여 배정할 수 없습니다.");
+        }
 
         const balance = db.prepare(
           `SELECT i.total_quantity, COUNT(a.id) AS allocated_quantity
@@ -287,9 +313,11 @@ export function createLocalRepository(db: Database.Database): OhRepository {
         const allocation = db.prepare("SELECT * FROM allocations WHERE id = ?").get(allocationId) as SqlRow | undefined;
         if (!allocation) throw new Error("배정을 찾을 수 없습니다.");
         if (allocation.status === "SHIPPED") throw new Error("출고된 배정은 취소할 수 없습니다.");
-        db.prepare("UPDATE allocations SET status = 'CANCELLED', cancelled_at = ? WHERE id = ?").run(now(), allocationId);
+        db.prepare(
+          "UPDATE allocations SET status = 'CANCELLED', cancelled_at = ?, cancel_reason = ? WHERE id = ?",
+        ).run(now(), reason.trim(), allocationId);
         recalculateRequestStatus(String(allocation.request_id));
-        writeAuditEvent("ALLOCATION_CANCELLED", "allocation", allocationId, ["status", "cancelled_at", "reason"]);
+        writeAuditEvent("ALLOCATION_CANCELLED", "allocation", allocationId, ["status", "cancelled_at", "cancel_reason"]);
       })();
     },
 
@@ -308,11 +336,14 @@ export function createLocalRepository(db: Database.Database): OhRepository {
         ).run(id, input.allocationId, input.shippedAt, input.revenue, input.note ?? null, createdAt);
         db.prepare("UPDATE allocations SET status = 'SHIPPED' WHERE id = ?").run(input.allocationId);
 
-        const outstanding = db.prepare(
-          "SELECT COUNT(*) AS count FROM allocations WHERE request_id = ? AND status = 'ALLOCATED'",
+        const request = db.prepare("SELECT quantity FROM requests WHERE id = ?").get(allocation.request_id) as SqlRow;
+        const shipped = db.prepare(
+          "SELECT COUNT(*) AS count FROM allocations WHERE request_id = ? AND status = 'SHIPPED'",
         ).get(allocation.request_id) as SqlRow;
-        if (Number(outstanding.count) === 0) {
+        if (Number(shipped.count) >= Number(request.quantity)) {
           db.prepare("UPDATE requests SET status = 'SHIPPED' WHERE id = ?").run(allocation.request_id);
+        } else {
+          recalculateRequestStatus(String(allocation.request_id));
         }
         writeAuditEvent("SHIPMENT_CREATED", "shipment", id, ["allocation_id", "shipped_at", "revenue"]);
         return asShipment(db.prepare("SELECT * FROM shipments WHERE id = ?").get(id) as SqlRow);

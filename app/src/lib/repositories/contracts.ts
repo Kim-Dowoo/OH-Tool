@@ -42,6 +42,7 @@ export interface AllocationRecord {
   status: AllocationStatus;
   allocatedAt: string;
   cancelledAt: string | null;
+  cancelReason: string | null;
 }
 
 export interface ShipmentRecord {
@@ -86,10 +87,12 @@ export interface OrganizationImportRecord {
   teamRaw: string;
   departmentName: string;
   teamName: string;
+  salesRep?: string | null;
   salesRepEmail?: string | null;
+  active?: boolean;
   partnerCode?: string;
   partnerName?: string;
-  salesRep?: string;
+  partnerActive?: boolean;
 }
 
 export interface ImportCommit {

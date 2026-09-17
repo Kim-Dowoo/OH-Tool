@@ -2,9 +2,10 @@ import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
-import { getRuntimeMode } from "@/lib/config/runtime-mode";
+import { assertSafeRuntime, getRuntimeMode } from "@/lib/config/runtime-mode";
 
 export function openDatabase(databasePath?: string): Database.Database {
+  assertSafeRuntime();
   if (getRuntimeMode() === "demo") {
     throw new Error("데모 모드에서는 로컬 데이터베이스를 열 수 없습니다.");
   }

@@ -49,5 +49,6 @@ export function createAllocation(db: Database.Database, input: AllocateInput): A
     status: "ALLOCATED",
     allocatedAt,
     cancelledAt: null,
+    cancelReason: null,
   };
 }

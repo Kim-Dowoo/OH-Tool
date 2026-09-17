@@ -32,4 +32,61 @@ describe("initial SQLite migration", () => {
       ).run(),
     ).toThrow();
   });
+
+  it("blocks direct allocations beyond either the request or model capacity", () => {
+    const db = createTestDatabase();
+    runMigrations(db);
+    seedRequestAndInventory(db);
+    createAllocation(db, { id: "A-1", requestId: "REQ-1", modelCode: "MODEL-A", serialNumber: "SN-001" });
+
+    expect(() =>
+      createAllocation(db, { id: "A-2", requestId: "REQ-1", modelCode: "MODEL-A", serialNumber: "SN-002" }),
+    ).toThrow();
+    expect(() =>
+      db.prepare("UPDATE model_inventory SET total_quantity = 0 WHERE model_code = 'MODEL-A'").run(),
+    ).toThrow();
+  });
+
+  it("preserves active organization and partner relationships", () => {
+    const db = createTestDatabase();
+    runMigrations(db);
+
+    db.prepare(
+      `INSERT INTO organization_mappings
+        (team_raw, department_name, team_name, sales_rep, sales_rep_email, active, updated_at)
+       VALUES ('Raw Team', 'Department', 'Team', 'Sales Rep', 'rep@example.invalid', 1, '2026-09-17T00:00:00.000Z')`,
+    ).run();
+    db.prepare(
+      `INSERT INTO partners
+        (partner_code, partner_name, team_raw, department_name, team_name, sales_rep, sales_rep_email, active, updated_at)
+       VALUES ('P-1', 'Partner', 'Raw Team', 'Department', 'Team', 'Sales Rep', 'rep@example.invalid', 1, '2026-09-17T00:00:00.000Z')`,
+    ).run();
+
+    expect(db.prepare("SELECT team_raw, active FROM partners WHERE partner_code = 'P-1'").get()).toEqual({
+      team_raw: "Raw Team",
+      active: 1,
+    });
+  });
+
+  it("upgrades a database created by the original initial migration", () => {
+    const db = createTestDatabase();
+    db.exec(`
+      CREATE TABLE allocations (
+        id TEXT PRIMARY KEY,
+        request_id TEXT NOT NULL,
+        model_code TEXT NOT NULL,
+        serial_number TEXT NOT NULL UNIQUE,
+        storage_location TEXT,
+        status TEXT NOT NULL,
+        allocated_at TEXT NOT NULL,
+        cancelled_at TEXT
+      );
+    `);
+
+    runMigrations(db);
+
+    expect(db.prepare("SELECT name FROM pragma_table_info('allocations') WHERE name = 'cancel_reason'").get()).toEqual({
+      name: "cancel_reason",
+    });
+  });
 });
