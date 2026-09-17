@@ -89,4 +89,32 @@ describe("initial SQLite migration", () => {
       name: "cancel_reason",
     });
   });
+
+  it("blocks direct active-allocation updates that violate request state or request capacity", () => {
+    const db = createTestDatabase();
+    runMigrations(db);
+    seedRequestAndInventory(db);
+    createAllocation(db, { id: "A-1", requestId: "REQ-1", modelCode: "MODEL-A", serialNumber: "SN-001" });
+    createAllocation(db, { id: "A-2", requestId: "REQ-2", modelCode: "MODEL-A", serialNumber: "SN-002" });
+    db.prepare("UPDATE requests SET status = 'CANCELLED' WHERE id = 'REQ-2'").run();
+
+    expect(() => db.prepare("UPDATE allocations SET request_id = 'REQ-2' WHERE id = 'A-1'").run()).toThrow();
+
+    db.prepare("UPDATE requests SET status = 'REVIEWED', quantity = 2 WHERE id = 'REQ-1'").run();
+    db.prepare("UPDATE allocations SET request_id = 'REQ-1' WHERE id = 'A-2'").run();
+    expect(() => db.prepare("UPDATE requests SET quantity = 1 WHERE id = 'REQ-1'").run()).toThrow();
+  });
+
+  it("blocks moving an active allocation to a zero-capacity model", () => {
+    const db = createTestDatabase();
+    runMigrations(db);
+    seedRequestAndInventory(db);
+    db.prepare(
+      `INSERT INTO model_inventory (model_code, family, total_quantity, updated_at)
+       VALUES ('MODEL-B', 'FAMILY-B', 0, '2026-09-17T00:00:00.000Z')`,
+    ).run();
+    createAllocation(db, { id: "A-1", requestId: "REQ-1", modelCode: "MODEL-A", serialNumber: "SN-001" });
+
+    expect(() => db.prepare("UPDATE allocations SET model_code = 'MODEL-B' WHERE id = 'A-1'").run()).toThrow();
+  });
 });

@@ -170,4 +170,73 @@ describe("local repository", () => {
     expect(db.prepare("SELECT COUNT(*) AS count FROM requests").get()).toEqual({ count: 0 });
     expect(db.prepare("SELECT COUNT(*) AS count FROM audit_events").get()).toEqual({ count: 0 });
   });
+
+  it("preserves disabled organization and partner records when re-import omits active flags", async () => {
+    const db = createTestDatabase();
+    runMigrations(db);
+    const repository = createLocalRepository(db);
+
+    await repository.saveImportBatch({
+      id: "ORG-BATCH-1",
+      importType: "ORGANIZATION",
+      sha256: "organization-hash-1",
+      sourceLabel: "synthetic-organization.xlsx",
+      totalRows: 1,
+      organizations: [{
+        teamRaw: "Raw Team",
+        departmentName: "Department",
+        teamName: "Team",
+        salesRep: "Sales Rep",
+        active: false,
+        partnerCode: "P-1",
+        partnerName: "Partner",
+        partnerActive: false,
+      }],
+    });
+    await repository.saveImportBatch({
+      id: "ORG-BATCH-2",
+      importType: "ORGANIZATION",
+      sha256: "organization-hash-2",
+      sourceLabel: "synthetic-organization.xlsx",
+      totalRows: 1,
+      organizations: [{
+        teamRaw: "Raw Team",
+        departmentName: "Department",
+        teamName: "Team",
+        salesRep: "Sales Rep",
+        partnerCode: "P-1",
+        partnerName: "Partner",
+      }],
+    });
+
+    expect(db.prepare("SELECT active FROM organization_mappings WHERE team_raw = 'Raw Team'").get()).toEqual({ active: 0 });
+    expect(db.prepare("SELECT active FROM partners WHERE partner_code = 'P-1'").get()).toEqual({ active: 0 });
+  });
+
+  it("persists a partner identity and its organization relation without a sales representative", async () => {
+    const db = createTestDatabase();
+    runMigrations(db);
+    const repository = createLocalRepository(db);
+
+    await repository.saveImportBatch({
+      id: "ORG-BATCH-1",
+      importType: "ORGANIZATION",
+      sha256: "organization-hash-1",
+      sourceLabel: "synthetic-organization.xlsx",
+      totalRows: 1,
+      organizations: [{
+        teamRaw: "Raw Team",
+        departmentName: "Department",
+        teamName: "Team",
+        partnerCode: "P-1",
+        partnerName: "Partner",
+      }],
+    });
+
+    expect(db.prepare("SELECT team_raw, department_name, team_name FROM partners WHERE partner_code = 'P-1'").get()).toEqual({
+      team_raw: "Raw Team",
+      department_name: "Department",
+      team_name: "Team",
+    });
+  });
 });

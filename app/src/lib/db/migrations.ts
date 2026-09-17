@@ -17,7 +17,7 @@ export function runMigrations(db: Database.Database): void {
   const applied = db.prepare("SELECT 1 FROM schema_migrations WHERE name = ?");
   const record = db.prepare("INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)");
   const run = db.transaction(() => {
-    for (const name of ["001_initial.sql", "002_repository_hardening.sql"]) {
+    for (const name of ["001_initial.sql", "002_repository_hardening.sql", "003_allocation_update_guards.sql"]) {
       if (applied.get(name)) continue;
       db.exec(readFileSync(resolve(migrationDirectory, name), "utf8"));
       record.run(name, new Date().toISOString());

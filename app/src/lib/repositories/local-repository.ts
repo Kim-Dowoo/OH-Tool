@@ -179,50 +179,56 @@ export function createLocalRepository(db: Database.Database): OhRepository {
           const upsertOrganization = db.prepare(
             `INSERT INTO organization_mappings
               (team_raw, department_name, team_name, sales_rep, sales_rep_email, active, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)
+             VALUES (?, ?, ?, ?, ?, COALESCE(?, 1), ?)
              ON CONFLICT(team_raw) DO UPDATE SET
                department_name = excluded.department_name,
                team_name = excluded.team_name,
-               sales_rep = excluded.sales_rep,
-               sales_rep_email = excluded.sales_rep_email,
-               active = excluded.active,
+               sales_rep = COALESCE(excluded.sales_rep, organization_mappings.sales_rep),
+               sales_rep_email = COALESCE(excluded.sales_rep_email, organization_mappings.sales_rep_email),
+               active = CASE WHEN ? IS NULL THEN organization_mappings.active ELSE ? END,
                updated_at = excluded.updated_at`,
           );
           const upsertPartner = db.prepare(
             `INSERT INTO partners
               (partner_code, partner_name, team_raw, department_name, team_name, sales_rep, sales_rep_email, active, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             VALUES (?, ?, ?, ?, ?, COALESCE(?, ''), ?, COALESCE(?, 1), ?)
              ON CONFLICT(partner_code) DO UPDATE SET
                partner_name = excluded.partner_name,
                team_raw = excluded.team_raw,
                department_name = excluded.department_name,
                team_name = excluded.team_name,
-               sales_rep = excluded.sales_rep,
-               sales_rep_email = excluded.sales_rep_email,
-               active = excluded.active,
+               sales_rep = CASE WHEN excluded.sales_rep = '' THEN partners.sales_rep ELSE excluded.sales_rep END,
+               sales_rep_email = COALESCE(excluded.sales_rep_email, partners.sales_rep_email),
+               active = CASE WHEN ? IS NULL THEN partners.active ELSE ? END,
                updated_at = excluded.updated_at`,
           );
           for (const organization of input.organizations ?? []) {
+            const organizationActive = organization.active === undefined ? null : organization.active ? 1 : 0;
             upsertOrganization.run(
               organization.teamRaw,
               organization.departmentName,
               organization.teamName,
               organization.salesRep ?? null,
               organization.salesRepEmail ?? null,
-              organization.active === false ? 0 : 1,
+              organizationActive,
               createdAt,
+              organizationActive,
+              organizationActive,
             );
-            if (organization.partnerCode && organization.partnerName && organization.salesRep) {
+            if (organization.partnerCode && organization.partnerName) {
+              const partnerActive = organization.partnerActive === undefined ? null : organization.partnerActive ? 1 : 0;
               upsertPartner.run(
                 organization.partnerCode,
                 organization.partnerName,
                 organization.teamRaw,
                 organization.departmentName,
                 organization.teamName,
-                organization.salesRep,
+                organization.salesRep ?? null,
                 organization.salesRepEmail ?? null,
-                organization.partnerActive === false ? 0 : 1,
+                partnerActive,
                 createdAt,
+                partnerActive,
+                partnerActive,
               );
             }
           }
