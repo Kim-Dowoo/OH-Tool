@@ -145,6 +145,15 @@ describe("inventory workbook", () => {
     expect(result.issues).toContainEqual(expect.objectContaining({ code: "MISSING_SUMMARY_MODEL", severity: "warning", sourceRow: 4 }));
   });
 
+  it("warns on an unallocated Detail model absent from Summary", async () => {
+    const result = await parseInventoryWorkbook(await buildWorkbook([
+      summary, ["FAMILY-A", "MODEL-A", 2, 0, 2], detail,
+      ["FAMILY-B", "MODEL-B", "SN-B", "Shelf", "파트너A", "26.09", 0, "미배정"],
+    ]));
+    expect(result.rows).toContainEqual(expect.objectContaining({ section: "DETAIL", sourceRow: 4, allocated: false }));
+    expect(result.issues).toContainEqual(expect.objectContaining({ code: "MISSING_SUMMARY_MODEL", severity: "warning", sourceRow: 4, column: "ITEM CODE" }));
+  });
+
   it("warns on a Detail Family that differs from its Summary model", async () => {
     const result = await parseInventoryWorkbook(await buildWorkbook([
       summary, ["FAMILY-A", "MODEL-A", 2, 1, 1], detail,

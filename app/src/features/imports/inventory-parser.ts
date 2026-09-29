@@ -106,8 +106,8 @@ export async function parseInventoryWorkbook(buffer: Buffer): Promise<ParseResul
   const summaryByModel = new Map(summaries.map((row) => [row.modelCode, row]));
   for (const row of details) {
     const summaryRow = summaryByModel.get(row.modelCode);
-    if (!summaryRow && row.allocated) {
-      issues.push({ code: "MISSING_SUMMARY_MODEL", message: "Allocated Detail model has no Summary row", severity: "warning", sourceRow: row.sourceRow, column: "ITEM CODE" });
+    if (!summaryRow) {
+      issues.push({ code: "MISSING_SUMMARY_MODEL", message: "Detail model has no Summary row", severity: "warning", sourceRow: row.sourceRow, column: "ITEM CODE" });
     }
     if (summaryRow && row.family !== summaryRow.family) {
       issues.push({ code: "FAMILY_MISMATCH", message: "Detail Family differs from Summary", severity: "warning", sourceRow: row.sourceRow, column: "Family" });
