@@ -5,9 +5,9 @@ import type { AllocationRecord, RequestRecord, ShipmentRecord } from "@/lib/repo
 import styles from "./request-details.module.css";
 
 type RequestDetailsProps = {
-  requests: RequestRecord[];
-  allocations: AllocationRecord[];
-  shipments: ShipmentRecord[];
+  requests: readonly RequestRecord[];
+  allocations: readonly AllocationRecord[];
+  shipments: readonly ShipmentRecord[];
 };
 
 const display = (value: string | null) => value || "-";
