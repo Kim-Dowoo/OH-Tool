@@ -22,6 +22,7 @@ export function runMigrations(db: Database.Database): void {
       "002_repository_hardening.sql",
       "003_allocation_update_guards.sql",
       "004_shipment_status_integrity.sql",
+      "005_reject_direct_shipped_allocations.sql",
     ]) {
       if (applied.get(name)) continue;
       db.exec(readFileSync(resolve(migrationDirectory, name), "utf8"));

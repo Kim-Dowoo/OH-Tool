@@ -146,4 +146,17 @@ describe("initial SQLite migration", () => {
     expect(() => db.prepare("UPDATE allocations SET status = 'ALLOCATED' WHERE id = 'A-1'").run()).toThrow();
     expect(() => db.prepare("DELETE FROM shipments WHERE id = 'S-1'").run()).toThrow();
   });
+
+  it("rejects direct insertion of a shipped allocation without a shipment row", () => {
+    const db = createTestDatabase();
+    runMigrations(db);
+    seedRequestAndInventory(db);
+
+    expect(() => db.prepare(
+      `INSERT INTO allocations (id, request_id, model_code, serial_number, status, allocated_at)
+       VALUES ('A-1', 'REQ-1', 'MODEL-A', 'SN-001', 'SHIPPED', '2026-09-17T00:00:00.000Z')`,
+    ).run()).toThrow(/shipment/);
+    expect(db.prepare("SELECT COUNT(*) AS count FROM allocations").get()).toEqual({ count: 0 });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM shipments").get()).toEqual({ count: 0 });
+  });
 });
