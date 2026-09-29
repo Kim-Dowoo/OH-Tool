@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { FormEvent, useState, useSyncExternalStore } from "react";
 import { RequestDetails } from "@/components/request-details";
 import type {
   AllocationRecord,
@@ -13,7 +13,9 @@ import type {
 import styles from "@/app/page.module.css";
 
 type DemoRole = "admin" | "user";
-type DemoView = "dashboard" | "requests" | "allocations" | "inventory" | "shipments";
+type DemoView = "dashboard" | "requests" | "newRequest" | "allocations" | "inventory" | "shipments";
+type DemoRequestDraft = { period: string; partnerCode: string; requestedModel: string; quantity: string; note: string };
+type SavedDemoRequest = { request: RequestRecord; note: string };
 
 type DemoWorkspaceProps = {
   period: string;
@@ -34,11 +36,17 @@ const adminMenu: { id: DemoView; label: string }[] = [
 ];
 const userMenu: { id: DemoView; label: string }[] = [
   { id: "requests", label: "OH 요청" },
+  { id: "newRequest", label: "OH기 요청 등록" },
   { id: "allocations", label: "배정 결과" },
 ];
 const demoUserSalesRep = "가상 담당자 1";
 const demoRoleStorageKey = "oh-demo-role";
+const demoRequestStorageKey = "oh-demo-requests";
 const demoRoleListeners = new Set<() => void>();
+const demoRequestListeners = new Set<() => void>();
+const emptyDemoRequests: SavedDemoRequest[] = [];
+let cachedDemoRequestsRaw: string | null = null;
+let cachedDemoRequests: SavedDemoRequest[] = emptyDemoRequests;
 
 function readStoredDemoRole(): DemoRole | null {
   if (typeof window === "undefined") return null;
@@ -70,6 +78,42 @@ function writeStoredDemoRole(role: DemoRole | null): void {
     // Browser storage is optional for this demo; the in-memory role still works.
   }
   for (const listener of demoRoleListeners) listener();
+}
+
+function readStoredDemoRequests(): SavedDemoRequest[] {
+  if (typeof window === "undefined") return emptyDemoRequests;
+  try {
+    const raw = window.localStorage.getItem(demoRequestStorageKey);
+    if (raw === cachedDemoRequestsRaw) return cachedDemoRequests;
+    const storedRequests = JSON.parse(raw ?? "[]");
+    cachedDemoRequestsRaw = raw;
+    cachedDemoRequests = Array.isArray(storedRequests) && storedRequests.every((item) => item?.request?.id && typeof item.note === "string") ? storedRequests : emptyDemoRequests;
+    return cachedDemoRequests;
+  } catch {
+    return cachedDemoRequests;
+  }
+}
+
+function subscribeToDemoRequests(listener: () => void): () => void {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === null || event.key === demoRequestStorageKey) listener();
+  };
+  demoRequestListeners.add(listener);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    demoRequestListeners.delete(listener);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+function writeStoredDemoRequests(requests: SavedDemoRequest[]): boolean {
+  try {
+    window.localStorage.setItem(demoRequestStorageKey, JSON.stringify(requests));
+  } catch {
+    return false;
+  }
+  for (const listener of demoRequestListeners) listener();
+  return true;
 }
 
 function Breakdown({ title, groups }: { title: string; groups: DashboardGroup[] }) {
@@ -129,14 +173,60 @@ function Dashboard({ period, summary, inventory, requests, allocations, shipment
   </main>;
 }
 
-function RequestsView({ requests, allocations, shipments }: Pick<DemoWorkspaceProps, "requests" | "allocations" | "shipments">) {
+function RequestsView({ requests, allocations, shipments, notes }: Pick<DemoWorkspaceProps, "requests" | "allocations" | "shipments"> & { notes: ReadonlyMap<string, string> }) {
   return <main className={styles.main}>
     <section className={styles.viewHeading}>
       <p className={styles.eyebrow}>REQUESTS / DEMO</p>
       <h1>OH 요청</h1>
       <p>가상 요청의 기본 정보와 배정 상세를 확인합니다.</p>
     </section>
-    <RequestDetails requests={requests} allocations={allocations} shipments={shipments} />
+    <RequestDetails requests={requests} allocations={allocations} shipments={shipments} notes={notes} />
+  </main>;
+}
+
+function RequestForm({ onSave }: { onSave: (draft: DemoRequestDraft) => boolean }) {
+  const [draft, setDraft] = useState<DemoRequestDraft>({ period: "", partnerCode: "", requestedModel: "", quantity: "", note: "" });
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const update = (field: keyof DemoRequestDraft, value: string) => setDraft((current) => ({ ...current, [field]: value }));
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const quantity = Number(draft.quantity);
+    if (!draft.period || !draft.partnerCode.trim() || !draft.requestedModel.trim() || !Number.isInteger(quantity) || quantity < 1) {
+      setMessage(null);
+      setError("요청 월도, ITSS CODE, 요청 기종과 1대 이상의 수량을 입력하세요.");
+      return;
+    }
+    if (!onSave({ ...draft, partnerCode: draft.partnerCode.trim(), requestedModel: draft.requestedModel.trim(), note: draft.note.trim() })) {
+      setMessage(null);
+      setError("브라우저 저장소에 접근할 수 없어 요청을 저장하지 못했습니다.");
+      return;
+    }
+    setDraft({ period: "", partnerCode: "", requestedModel: "", quantity: "", note: "" });
+    setError(null);
+    setMessage("요청을 저장했습니다.");
+  };
+
+  return <main className={styles.main}>
+    <section className={styles.viewHeading}>
+      <p className={styles.eyebrow}>NEW REQUEST</p>
+      <h1>OH기 요청 등록</h1>
+      <p>저장한 요청은 이 브라우저에 보관되며, 같은 브라우저의 관리자 요청 목록에서도 확인할 수 있습니다.</p>
+    </section>
+    <section className={styles.requestFormPanel} aria-labelledby="new-request-heading">
+      <div className={styles.panelHeading}><h2 id="new-request-heading">요청 시트</h2><span>브라우저 내부 저장</span></div>
+      <form className={styles.requestForm} onSubmit={submit}>
+        <label>요청 월도<input aria-label="요청 월도" type="month" value={draft.period} onChange={(event) => update("period", event.target.value)} required /></label>
+        <label>ITSS CODE<input aria-label="ITSS CODE" value={draft.partnerCode} onChange={(event) => update("partnerCode", event.target.value)} placeholder="예: ITSS-001" required /></label>
+        <label>요청 기종<input aria-label="요청 기종" value={draft.requestedModel} onChange={(event) => update("requestedModel", event.target.value)} placeholder="예: OH-100" required /></label>
+        <label>요청 수량<input aria-label="요청 수량" type="number" min="1" step="1" value={draft.quantity} onChange={(event) => update("quantity", event.target.value)} required /></label>
+        <label className={styles.fullWidth}>요청 메모<textarea aria-label="요청 메모" value={draft.note} onChange={(event) => update("note", event.target.value)} placeholder="요청 사유나 전달할 내용을 입력하세요." rows={4} /></label>
+        {error && <p className={styles.formError} role="alert">{error}</p>}
+        {message && <p className={styles.formSuccess} role="status">{message}</p>}
+        <div className={styles.formActions}><button type="submit">요청 저장</button></div>
+      </form>
+    </section>
   </main>;
 }
 
@@ -203,6 +293,7 @@ function ShipmentsView({ requests, allocations, shipments }: Pick<DemoWorkspaceP
 
 export function DemoWorkspace(props: DemoWorkspaceProps) {
   const storedRole = useSyncExternalStore(subscribeToDemoRole, readStoredDemoRole, () => null);
+  const savedRequests = useSyncExternalStore(subscribeToDemoRequests, readStoredDemoRequests, () => emptyDemoRequests);
   const [sessionRole, setSessionRole] = useState<DemoRole | null | undefined>(undefined);
   const role = sessionRole === undefined ? storedRole : sessionRole;
   const [view, setView] = useState<DemoView>("dashboard");
@@ -219,10 +310,37 @@ export function DemoWorkspace(props: DemoWorkspaceProps) {
     setView("dashboard");
   };
 
+  const saveRequest = (draft: DemoRequestDraft): boolean => {
+    const timestamp = new Date().toISOString();
+    const request: RequestRecord = {
+      id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      importBatchId: "browser-local",
+      sourceRow: 0,
+      sourceNumber: null,
+      period: draft.period,
+      partnerCode: draft.partnerCode,
+      teamRaw: demoUserSalesRep,
+      departmentName: "브라우저 등록",
+      teamName: "직접 등록",
+      partnerName: "직접 등록 요청",
+      salesRep: demoUserSalesRep,
+      dealType: null,
+      endUser: null,
+      currentBrand: null,
+      currentModel: null,
+      requestedModel: draft.requestedModel,
+      requestedFamily: "직접 입력",
+      quantity: Number(draft.quantity),
+      status: "RECEIVED",
+      createdAt: timestamp,
+    };
+    return writeStoredDemoRequests([...savedRequests, { request, note: draft.note }]);
+  };
+
   if (!role) return <main className={styles.loginShell}>
     <section className={styles.loginCard}>
       <span className={styles.loginMark} aria-hidden="true">OH</span>
-      <p className={styles.eyebrow}>READ-ONLY DEMO</p>
+      <p className={styles.eyebrow}>BROWSER-LOCAL DEMO</p>
       <h1>데모 로그인</h1>
       <p>확인할 역할을 선택하세요. 실제 계정이나 업무 데이터는 사용하지 않습니다.</p>
       <div className={styles.loginActions}>
@@ -232,7 +350,9 @@ export function DemoWorkspace(props: DemoWorkspaceProps) {
     </section>
   </main>;
 
-  const visibleRequests = role === "user" ? props.requests.filter((request) => request.salesRep === demoUserSalesRep) : props.requests;
+  const allRequests = [...props.requests, ...savedRequests.map((item) => item.request)];
+  const requestNotes = new Map(savedRequests.map((item) => [item.request.id, item.note]));
+  const visibleRequests = role === "user" ? allRequests.filter((request) => request.salesRep === demoUserSalesRep) : allRequests;
   const visibleRequestIds = new Set(visibleRequests.map((request) => request.id));
   const visibleAllocations = role === "user" ? props.allocations.filter((allocation) => visibleRequestIds.has(allocation.requestId)) : props.allocations;
   const visibleAllocationIds = new Set(visibleAllocations.map((allocation) => allocation.id));
@@ -241,7 +361,8 @@ export function DemoWorkspace(props: DemoWorkspaceProps) {
   const effectiveView = menu.some((item) => item.id === view) ? view : menu[0].id;
 
   let content = <Dashboard {...props} />;
-  if (effectiveView === "requests") content = <RequestsView requests={visibleRequests} allocations={visibleAllocations} shipments={visibleShipments} />;
+  if (effectiveView === "requests") content = <RequestsView requests={visibleRequests} allocations={visibleAllocations} shipments={visibleShipments} notes={requestNotes} />;
+  if (effectiveView === "newRequest") content = <RequestForm onSave={saveRequest} />;
   if (effectiveView === "allocations") content = <AllocationsView requests={visibleRequests} allocations={visibleAllocations} scope={role === "admin" ? "all" : "own"} />;
   if (effectiveView === "inventory") content = <InventoryView inventory={props.inventory} />;
   if (effectiveView === "shipments") content = <ShipmentsView requests={visibleRequests} allocations={visibleAllocations} shipments={visibleShipments} />;
@@ -258,7 +379,7 @@ export function DemoWorkspace(props: DemoWorkspaceProps) {
       <header className={styles.header}>
         <div><strong>OH MANAGEMENT</strong><span className={styles.brandSub}>OPERATIONS OVERVIEW</span></div>
         <div className={styles.headerActions}>
-          <span className={styles.readOnly}><span aria-hidden="true">●</span> 읽기 전용 데모</span>
+          <span className={styles.readOnly}><span aria-hidden="true">●</span> 브라우저 저장형 데모</span>
           <button type="button" className={styles.logoutButton} onClick={logout}>로그아웃</button>
         </div>
       </header>

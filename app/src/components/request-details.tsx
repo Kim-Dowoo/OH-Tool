@@ -8,12 +8,13 @@ type RequestDetailsProps = {
   requests: readonly RequestRecord[];
   allocations: readonly AllocationRecord[];
   shipments: readonly ShipmentRecord[];
+  notes?: ReadonlyMap<string, string>;
 };
 
 const display = (value: string | null) => value || "-";
 const period = (value: string) => value.replace("-", ". ");
 
-export function RequestDetails({ requests, allocations, shipments }: RequestDetailsProps) {
+export function RequestDetails({ requests, allocations, shipments, notes }: RequestDetailsProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = requests.find((request) => request.id === selectedId) ?? null;
   const selectedAllocations = selected ? allocations.filter((allocation) => allocation.requestId === selected.id) : [];
@@ -36,7 +37,7 @@ export function RequestDetails({ requests, allocations, shipments }: RequestDeta
       <section className={styles.dialog} role="dialog" aria-modal="true" aria-label="OH 요청 상세" onMouseDown={(event) => event.stopPropagation()}>
         <header><div><p>REQUEST DETAIL</p><h2>{selected.requestedModel} 요청 상세</h2></div><button type="button" className={styles.closeButton} onClick={() => setSelectedId(null)} aria-label="상세 닫기">×</button></header>
         <dl className={styles.details}>
-          <div><dt>월도</dt><dd>{period(selected.period)}</dd></div><div><dt>ITSS CODE</dt><dd>{selected.partnerCode}</dd></div><div><dt>Team</dt><dd>{selected.teamName}</dd></div><div><dt>파트너사명</dt><dd>{selected.partnerName}</dd></div><div><dt>담당 DM</dt><dd>{selected.salesRep}</dd></div><div><dt>Deal Type</dt><dd>{display(selected.dealType)}</dd></div><div><dt>End-user</dt><dd>{display(selected.endUser)}</dd></div><div><dt>현 사용 Brand</dt><dd>{display(selected.currentBrand)}</dd></div><div><dt>현 사용기종</dt><dd>{display(selected.currentModel)}</dd></div><div><dt>요청 기종</dt><dd>{selected.requestedModel}</dd></div><div><dt>요청 수량</dt><dd>{selected.quantity}대</dd></div><div><dt>Family</dt><dd>{selected.requestedFamily}</dd></div>
+          <div><dt>월도</dt><dd>{period(selected.period)}</dd></div><div><dt>ITSS CODE</dt><dd>{selected.partnerCode}</dd></div><div><dt>Team</dt><dd>{selected.teamName}</dd></div><div><dt>파트너사명</dt><dd>{selected.partnerName}</dd></div><div><dt>담당 DM</dt><dd>{selected.salesRep}</dd></div><div><dt>Deal Type</dt><dd>{display(selected.dealType)}</dd></div><div><dt>End-user</dt><dd>{display(selected.endUser)}</dd></div><div><dt>현 사용 Brand</dt><dd>{display(selected.currentBrand)}</dd></div><div><dt>현 사용기종</dt><dd>{display(selected.currentModel)}</dd></div><div><dt>요청 기종</dt><dd>{selected.requestedModel}</dd></div><div><dt>요청 수량</dt><dd>{selected.quantity}대</dd></div><div><dt>Family</dt><dd>{selected.requestedFamily}</dd></div>{notes?.has(selected.id) && <div><dt>요청 메모</dt><dd>{notes.get(selected.id) || "-"}</dd></div>}
         </dl>
         <h3>배정 SN</h3>
         <div className={styles.tableScroll}><table aria-label="배정 SN"><thead><tr><th scope="col">SN</th><th scope="col">보관장소</th><th scope="col">배정 월도</th><th scope="col">배정 여부</th><th scope="col">출고 상태</th></tr></thead><tbody>{selectedAllocations.length ? selectedAllocations.map((allocation) => {

@@ -17,7 +17,7 @@ afterEach(() => {
 it("requires a demo role and opens the full administrator workspace", async () => {
   vi.stubEnv("APP_MODE", "demo");
   render(RootLayout({ children: await Home() }), { container: document });
-  expect(screen.getByText("DEMO — 실제 데이터를 입력하지 마세요")).toBeTruthy();
+  expect(screen.getByText("DEMO — 요청은 이 브라우저에만 저장됩니다")).toBeTruthy();
   expect(screen.getByRole("heading", { name: "데모 로그인" })).toBeTruthy();
   expect(screen.getByRole("button", { name: /^사용자 로그인/ })).toBeTruthy();
   expect(screen.queryByRole("heading", { name: "OH 운영 현황" })).toBeNull();
@@ -66,6 +66,44 @@ it("limits the user workspace to its own synthetic requests and allocation resul
   const allocations = screen.getByRole("table", { name: "내 배정 결과" });
   expect(within(allocations).getByText("DEMO-SN-1-001")).toBeTruthy();
   expect(within(allocations).queryByText("DEMO-SN-2-001")).toBeNull();
+});
+
+it("saves a user-entered OH request locally and exposes it to the administrator request list", async () => {
+  vi.stubEnv("APP_MODE", "demo");
+  render(RootLayout({ children: await Home() }), { container: document });
+  fireEvent.click(screen.getByRole("button", { name: /^사용자 로그인/ }));
+
+  const userNavigation = screen.getByRole("navigation", { name: "사용자 메뉴" });
+  fireEvent.click(within(userNavigation).getByRole("button", { name: "OH기 요청 등록" }));
+  fireEvent.change(screen.getByLabelText("요청 월도"), { target: { value: "2026-10" } });
+  fireEvent.change(screen.getByLabelText("ITSS CODE"), { target: { value: "DIRECT-001" } });
+  fireEvent.change(screen.getByLabelText("요청 기종"), { target: { value: "OH-DIRECT-100" } });
+  fireEvent.change(screen.getByLabelText("요청 수량"), { target: { value: "3" } });
+  fireEvent.change(screen.getByLabelText("요청 메모"), { target: { value: "신규 요청 테스트" } });
+  fireEvent.submit(screen.getByRole("button", { name: "요청 저장" }).closest("form")!);
+
+  expect(screen.getByText("요청을 저장했습니다.")).toBeTruthy();
+  fireEvent.click(within(userNavigation).getByRole("button", { name: "OH 요청" }));
+  expect(within(screen.getByRole("table", { name: "OH 요청 목록" })).getByText("DIRECT-001")).toBeTruthy();
+
+  cleanup();
+  render(RootLayout({ children: await Home() }), { container: document });
+  fireEvent.click(screen.getByRole("button", { name: "로그아웃" }));
+  fireEvent.click(screen.getByRole("button", { name: /^관리자 로그인/ }));
+  fireEvent.click(within(screen.getByRole("navigation", { name: "관리 메뉴" })).getByRole("button", { name: "OH 요청" }));
+  expect(within(screen.getByRole("table", { name: "OH 요청 목록" })).getByText("DIRECT-001")).toBeTruthy();
+});
+
+it("rejects an OH request with missing required values or a zero quantity", async () => {
+  vi.stubEnv("APP_MODE", "demo");
+  render(RootLayout({ children: await Home() }), { container: document });
+  fireEvent.click(screen.getByRole("button", { name: /^사용자 로그인/ }));
+  fireEvent.click(within(screen.getByRole("navigation", { name: "사용자 메뉴" })).getByRole("button", { name: "OH기 요청 등록" }));
+
+  fireEvent.submit(screen.getByRole("button", { name: "요청 저장" }).closest("form")!);
+
+  expect(screen.getByRole("alert").textContent).toContain("요청 월도, ITSS CODE, 요청 기종과 1대 이상의 수량을 입력하세요.");
+  expect(window.localStorage.getItem("oh-demo-requests")).toBeNull();
 });
 
 it("switches administrator menus across every all-data view", async () => {
