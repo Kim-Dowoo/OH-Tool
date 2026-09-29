@@ -1,7 +1,5 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  ...(process.env.APP_MODE === "demo" ? { output: "export" } : {}),
-};
+const nextConfig: NextConfig = {};
 
 export default nextConfig;
