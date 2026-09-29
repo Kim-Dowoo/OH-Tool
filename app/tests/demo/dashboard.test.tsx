@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import Home from "@/app/page";
 import RootLayout from "@/app/layout";
@@ -20,9 +20,9 @@ it("renders the demo warning and repository-backed overview without mutation con
   expect(screen.getByRole("table", { name: "기종별 재고" })).toBeTruthy();
   expect(screen.getByRole("table", { name: "파트너별 현황" })).toBeTruthy();
   expect(screen.getByRole("table", { name: "팀별 현황" })).toBeTruthy();
-  expect(screen.getByText("가상 파트너 · 새봄")).toBeTruthy();
-  expect(screen.getByText("DEMO-100")).toBeTruthy();
-  expect(document.querySelector('input, form, button, a[download], a[href*="export"], a[href*="import"]')).toBeNull();
+  expect(within(screen.getByRole("table", { name: "파트너별 현황" })).getByText("가상 파트너 · 새봄")).toBeTruthy();
+  expect(within(screen.getByRole("table", { name: "기종별 재고" })).getByText("DEMO-100")).toBeTruthy();
+  expect(document.querySelector('input, form, a[download], a[href*="export"], a[href*="import"]')).toBeNull();
 });
 
 it("keeps local mode as a small placeholder without demo data", async () => {
@@ -31,4 +31,20 @@ it("keeps local mode as a small placeholder without demo data", async () => {
   render(await Home());
   expect(screen.getByRole("heading", { name: "OH 관리 · 로컬 모드" })).toBeTruthy();
   expect(screen.queryByText("DEMO-100")).toBeNull();
+});
+
+it("shows request-sheet fields and opens the allocation detail from the requested quantity", async () => {
+  vi.stubEnv("APP_MODE", "demo");
+  render(RootLayout({ children: await Home() }), { container: document });
+
+  const requests = screen.getByRole("table", { name: "OH 요청 목록" });
+  expect(within(requests).getByText("월도")).toBeTruthy();
+  expect(within(requests).getByText("ITSS CODE")).toBeTruthy();
+  expect(within(requests).getByText("요청 기종")).toBeTruthy();
+  expect(within(requests).getByRole("button", { name: "12대 요청 상세 보기" })).toBeTruthy();
+
+  fireEvent.click(within(requests).getByRole("button", { name: "12대 요청 상세 보기" }));
+  expect(screen.getByRole("dialog", { name: "OH 요청 상세" })).toBeTruthy();
+  expect(screen.getByText("DEMO-SN-1-001")).toBeTruthy();
+  expect(within(screen.getByRole("dialog", { name: "OH 요청 상세" })).getAllByText("가상 보관소").length).toBeGreaterThan(0);
 });

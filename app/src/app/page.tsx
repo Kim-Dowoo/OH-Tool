@@ -1,4 +1,5 @@
-import { DEMO_PERIOD } from "@/demo/seed";
+import { DEMO_PERIOD, demoSeed } from "@/demo/seed";
+import { RequestDetails } from "@/components/request-details";
 import { assertSafeRuntime, getRuntimeMode } from "@/lib/config/runtime-mode";
 import { createDemoRepository } from "@/lib/repositories/demo-repository";
 import type { DashboardGroup } from "@/lib/repositories/contracts";
@@ -29,7 +30,7 @@ export default async function Home() {
   </main>;
 
   const repository = createDemoRepository();
-  const [summary, inventory] = await Promise.all([repository.getDashboard({}), repository.getInventoryBalances()]);
+  const [summary, inventory, requests] = await Promise.all([repository.getDashboard({}), repository.getInventoryBalances(), repository.listRequests({})]);
   const cards = [
     { label: "요청 수량", value: summary.totalRequested, unit: "대", detail: "접수된 전체 요청", tone: "" },
     { label: "배정 수량", value: summary.totalAllocated, unit: "대", detail: "출고 완료 수량 포함", tone: styles.teal },
@@ -51,6 +52,7 @@ export default async function Home() {
           <h2>{card.label}</h2><p className={styles.metric}><strong>{number(card.value)}</strong><span>{card.unit}</span></p><p className={styles.cardDetail}>{card.detail}</p>
         </article>)}
       </section>
+      <RequestDetails requests={requests} allocations={demoSeed.allocations} shipments={demoSeed.shipments} />
       <section className={styles.panel}>
         <div className={styles.panelHeading}><div><p className={styles.eyebrow}>INVENTORY</p><h2>기종별 재고</h2></div><span>잔여 = 총재고 − 배정</span></div>
         <div className={styles.tableScroll}>

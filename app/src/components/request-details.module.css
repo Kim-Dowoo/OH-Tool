@@ -1,0 +1,23 @@
+.panel { background: #fff; border: 1px solid #e3e9e5; border-radius: 18px; padding: 24px; box-shadow: 0 10px 25px rgba(21, 47, 36, .04); }
+.heading { display: flex; justify-content: space-between; gap: 16px; align-items: end; margin-bottom: 18px; }
+.heading p, .dialog header p { color: #15846b; font-size: 12px; font-weight: 800; letter-spacing: .09em; margin: 0 0 5px; }
+.heading h2, .dialog h2 { margin: 0; font-size: 21px; color: #18372e; }
+.heading > span { color: #6b7b74; font-size: 13px; }
+.tableScroll { overflow-x: auto; }
+.tableScroll table { border-collapse: collapse; min-width: 1280px; width: 100%; font-size: 13px; }
+.tableScroll th { background: #f3f7f4; color: #39564b; font-weight: 700; text-align: left; white-space: nowrap; }
+.tableScroll th, .tableScroll td { border-bottom: 1px solid #e7ece9; padding: 12px 11px; vertical-align: top; }
+.tableScroll td { color: #294238; white-space: nowrap; }
+.quantityButton { background: #e3f5ef; border: 0; border-radius: 7px; color: #087056; cursor: pointer; font: inherit; font-weight: 800; padding: 6px 9px; text-decoration: underline; }
+.quantityButton:hover { background: #cdece1; }
+.backdrop { align-items: center; background: rgba(18, 37, 29, .52); display: flex; inset: 0; justify-content: center; padding: 20px; position: fixed; z-index: 20; }
+.dialog { background: #fff; border-radius: 18px; box-shadow: 0 24px 55px rgba(0, 0, 0, .22); max-height: calc(100vh - 40px); max-width: 920px; overflow: auto; padding: 24px; width: 100%; }
+.dialog header { align-items: flex-start; display: flex; justify-content: space-between; margin-bottom: 20px; }
+.closeButton { background: #f0f4f1; border: 0; border-radius: 50%; color: #315246; cursor: pointer; font-size: 25px; height: 34px; line-height: 28px; width: 34px; }
+.details { display: grid; gap: 0; grid-template-columns: repeat(3, 1fr); margin: 0 0 22px; }
+.details div { border: 1px solid #e5ebe7; margin: -1px 0 0 -1px; min-height: 70px; padding: 11px; }
+.details dt { color: #6b7b74; font-size: 11px; font-weight: 700; margin-bottom: 6px; }
+.details dd { color: #213e34; font-size: 14px; margin: 0; overflow-wrap: anywhere; }
+.dialog h3 { color: #244238; font-size: 16px; margin: 0 0 10px; }
+.dialog .tableScroll table { min-width: 650px; }
+@media (max-width: 700px) { .panel { padding: 16px; } .heading { align-items: flex-start; flex-direction: column; } .details { grid-template-columns: 1fr 1fr; } .dialog { padding: 18px; } }
