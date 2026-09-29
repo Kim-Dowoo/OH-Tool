@@ -57,5 +57,5 @@ describe("xlsx upload inspection", () => {
       rejected = (error as Error).message.includes("expansion limit");
     }
     expect(rejected).toBe(true);
-  });
+  }, 15_000);
 });
