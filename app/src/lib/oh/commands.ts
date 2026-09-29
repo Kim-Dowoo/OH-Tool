@@ -17,3 +17,12 @@ export async function createRequest(input: CreateRequestInput): Promise<{ error?
   });
   return error ? { error: "요청을 저장하지 못했습니다. 승인 상태와 입력값을 확인하세요." } : {};
 }
+
+async function callAdminRpc(name: "approve_profile" | "register_inventory_serial" | "allocate_serial" | "ship_allocation", args: Record<string, unknown>) {
+  const { error } = await createSupabaseBrowserClient().rpc(name, args);
+  return error ? { error: "작업을 완료하지 못했습니다. 권한, 상태 및 입력값을 확인하세요." } : {};
+}
+export const approveProfile = (profileId: string) => callAdminRpc("approve_profile", { target_profile_id: profileId });
+export const registerInventorySerial = (modelCode: string, serialNumber: string, storageLocation: string) => callAdminRpc("register_inventory_serial", { model_code_value: modelCode, serial_number_value: serialNumber, storage_location_value: storageLocation || null });
+export const allocateSerial = (requestId: string, serialNumber: string) => callAdminRpc("allocate_serial", { request_id_value: requestId, serial_number_value: serialNumber });
+export const shipAllocation = (allocationId: string, shippedAt: string, revenue: number, note: string) => callAdminRpc("ship_allocation", { allocation_id_value: allocationId, shipped_at_value: shippedAt, revenue_value: revenue, note_value: note });
