@@ -26,6 +26,8 @@ describe("database client", () => {
   });
 
   it("finds migrations when invoked from the repository root", () => {
+    process.env.APP_MODE = "local";
+    delete process.env.VERCEL;
     const db = openDatabase(":memory:");
     chdir(repositoryDirectory);
 
@@ -34,5 +36,6 @@ describe("database client", () => {
     expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'requests'").get()).toEqual({
       name: "requests",
     });
+    db.close();
   });
 });
