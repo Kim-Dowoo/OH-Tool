@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { DemoBanner } from "@/components/demo-banner";
-import { assertSafeRuntime, getRuntimeMode } from "@/lib/config/runtime-mode";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -10,6 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  assertSafeRuntime();
-  return <html lang="ko"><body>{getRuntimeMode() === "demo" && <DemoBanner />}{children}</body></html>;
+  return <html lang="ko"><body>{children}</body></html>;
 }
