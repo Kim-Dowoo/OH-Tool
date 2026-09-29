@@ -16,6 +16,7 @@ exports/**
 .env
 .env.*
 !.env.example
+!app/.env.example
 .vercel/
 
 # Node and test outputs
