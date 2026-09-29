@@ -33,6 +33,19 @@ describe("xlsx upload inspection", () => {
     await expect(inspectXlsxUpload(new File([altered as unknown as BlobPart], "renamed.xlsx"))).rejects.toThrow();
   });
 
+  it("rejects an unsafe original ZIP entry name even if JSZip normalizes it", async () => {
+    const zip = await JSZip.loadAsync(await buildRequestWorkbook([]));
+    zip.file("../unexpected.xml", "synthetic unsafe entry");
+    const altered = await zip.generateAsync({ type: "uint8array" });
+    let rejected = false;
+    try {
+      await inspectXlsxUpload(new File([altered as unknown as BlobPart], "unsafe.xlsx"));
+    } catch {
+      rejected = true;
+    }
+    expect(rejected).toBe(true);
+  });
+
   it("rejects ZIP content that expands beyond the workbook budget", async () => {
     const zip = await JSZip.loadAsync(await buildRequestWorkbook([]));
     zip.file("xl/large-extra.bin", Buffer.alloc(51 * 1024 * 1024));

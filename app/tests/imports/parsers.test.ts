@@ -100,6 +100,16 @@ describe("inventory workbook", () => {
     expect(result.issues).toHaveLength(0);
   });
 
+  it("finds a Detail header after row 100 within the supported worksheet", async () => {
+    const filler = Array.from({ length: 99 }, () => [] as unknown[]);
+    const result = await parseInventoryWorkbook(await buildWorkbook([
+      summary, ["FAMILY-A", "MODEL-A", 2, 1, 1], ...filler,
+      detail, ["FAMILY-A", "MODEL-A", "SN-1", "Shelf", "파트너A", "26.09", 1, "확인"],
+    ]));
+    expect(result.issues).not.toContainEqual(expect.objectContaining({ code: "MISSING_HEADERS" }));
+    expect(result.rows).toContainEqual(expect.objectContaining({ section: "DETAIL", sourceRow: 103, serialNumber: "SN-1" }));
+  });
+
   it("rejects a repeated Detail SN instead of returning it for import", async () => {
     const result = await parseInventoryWorkbook(await buildWorkbook([
       summary, ["FAMILY-A", "MODEL-A", 2, 0, 2], detail,
@@ -117,6 +127,31 @@ describe("inventory workbook", () => {
     expect(result.rows).toHaveLength(0);
     expect(result.issues.filter((issue) => issue.code === "FORMULA_CELL")).toHaveLength(2);
   });
+
+  it("reports formula-only rows in both inventory sections", async () => {
+    const result = await parseInventoryWorkbook(await buildWorkbook([
+      summary, [{ formula: '"FAMILY-A"' }], detail,
+      [null, null, { formula: '"SN-1"' }],
+    ]));
+    expect(result.issues).toContainEqual(expect.objectContaining({ code: "FORMULA_CELL", sourceRow: 2, column: "Family" }));
+    expect(result.issues).toContainEqual(expect.objectContaining({ code: "FORMULA_CELL", sourceRow: 4, column: "SN" }));
+  });
+
+  it("warns on an allocated Detail model absent from Summary", async () => {
+    const result = await parseInventoryWorkbook(await buildWorkbook([
+      summary, ["FAMILY-A", "MODEL-A", 2, 0, 2], detail,
+      ["FAMILY-B", "MODEL-B", "SN-B", "Shelf", "파트너A", "26.09", 1, "확인"],
+    ]));
+    expect(result.issues).toContainEqual(expect.objectContaining({ code: "MISSING_SUMMARY_MODEL", severity: "warning", sourceRow: 4 }));
+  });
+
+  it("warns on a Detail Family that differs from its Summary model", async () => {
+    const result = await parseInventoryWorkbook(await buildWorkbook([
+      summary, ["FAMILY-A", "MODEL-A", 2, 1, 1], detail,
+      ["FAMILY-B", "MODEL-A", "SN-A", "Shelf", "파트너A", "26.09", 1, "확인"],
+    ]));
+    expect(result.issues).toContainEqual(expect.objectContaining({ code: "FAMILY_MISMATCH", severity: "warning", sourceRow: 4 }));
+  });
 });
 
 describe("organization workbook", () => {
@@ -126,6 +161,14 @@ describe("organization workbook", () => {
       ["DEMO001", "가상영업부 가상팀", "파트너A", "영업01"],
     ]));
     expect(result.rows[0]).toMatchObject({ partnerCode: "DEMO001", teamRaw: "가상영업부 가상팀", departmentName: null, teamName: null, sourceRow: 3 });
+  });
+
+  it("reports a formula-only organization row", async () => {
+    const result = await parseOrganizationWorkbook(await buildWorkbook([
+      ["ITSS CODE", "Team", "파트너사명", "담당 DM"],
+      [{ formula: '"DEMO001"' }],
+    ]));
+    expect(result.issues).toContainEqual(expect.objectContaining({ code: "FORMULA_CELL", sourceRow: 2, column: "ITSS CODE" }));
   });
 });
 

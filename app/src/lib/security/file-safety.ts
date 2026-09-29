@@ -30,7 +30,9 @@ async function assertXlsxPackage(buffer: Buffer): Promise<void> {
   }
   const names = Object.keys(zip.files);
   if (names.length > 1_000) throw new Error("XLSX ZIP entry count is invalid");
-  if (names.some((name) => /(^|\/)vbaProject\.bin$/i.test(name) || name.includes("\\") || name.split("/").includes(".."))) {
+  const unsafeName = (name: string) =>
+    /(^|\/)vbaProject\.bin$/i.test(name) || name.includes("\\") || name.startsWith("/") || name.split("/").includes("..");
+  if (Object.values(zip.files).some((entry) => unsafeName(entry.name) || unsafeName(entry.unsafeOriginalName ?? entry.name))) {
     throw new Error("Macro-enabled or unsafe ZIP entries are not allowed");
   }
   let expandedBytes = 0;

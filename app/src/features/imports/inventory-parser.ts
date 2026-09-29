@@ -13,8 +13,8 @@ export async function parseInventoryWorkbook(buffer: Buffer): Promise<ParseResul
   const rows: InventoryImportRow[] = [];
   const issues: ImportIssue[] = [];
   const result = { rows, issues, sheetName: sheet.name, skippedSampleRows: [] as number[] };
-  const summary = findHeaders(sheet, SUMMARY_HEADERS, Math.min(sheet.rowCount, 100));
-  const detail = findHeaders(sheet, DETAIL_HEADERS, Math.min(sheet.rowCount, 100));
+  const summary = findHeaders(sheet, SUMMARY_HEADERS, sheet.rowCount);
+  const detail = findHeaders(sheet, DETAIL_HEADERS, sheet.rowCount);
   if (!summary || !detail || summary.row === detail.row) {
     issues.push({ code: "MISSING_HEADERS", message: "Summary or Detail inventory headers were not found", severity: "error" });
     return result;
@@ -39,7 +39,6 @@ export async function parseInventoryWorkbook(buffer: Buffer): Promise<ParseResul
         const cell = getCell(name);
         return cell ? cellText(cell) : "";
       };
-      if (fields.every((name) => !getText(name))) continue;
       const formulaHeader = fields.find((name) => {
         const cell = getCell(name);
         return cell && isFormula(cell);
@@ -48,6 +47,7 @@ export async function parseInventoryWorkbook(buffer: Buffer): Promise<ParseResul
         issues.push({ code: "FORMULA_CELL", message: "Formula cells cannot be imported", severity: "error", sourceRow, column: formulaHeader });
         continue;
       }
+      if (fields.every((name) => !getText(name))) continue;
       const family = getText("Family");
       const modelCode = getText("ITEM CODE");
       if (!family || !modelCode) {
@@ -103,6 +103,16 @@ export async function parseInventoryWorkbook(buffer: Buffer): Promise<ParseResul
   parseSection("DETAIL");
   const summaries = rows.filter((row): row is InventorySummaryRow => row.section === "SUMMARY");
   const details = rows.filter((row): row is InventoryDetailRow => row.section === "DETAIL");
+  const summaryByModel = new Map(summaries.map((row) => [row.modelCode, row]));
+  for (const row of details) {
+    const summaryRow = summaryByModel.get(row.modelCode);
+    if (!summaryRow && row.allocated) {
+      issues.push({ code: "MISSING_SUMMARY_MODEL", message: "Allocated Detail model has no Summary row", severity: "warning", sourceRow: row.sourceRow, column: "ITEM CODE" });
+    }
+    if (summaryRow && row.family !== summaryRow.family) {
+      issues.push({ code: "FAMILY_MISMATCH", message: "Detail Family differs from Summary", severity: "warning", sourceRow: row.sourceRow, column: "Family" });
+    }
+  }
   for (const row of summaries) {
     const count = details.filter((detailRow) => detailRow.modelCode === row.modelCode && detailRow.allocated).length;
     if ((summary.columns.has("배정 수량") && count !== row.allocatedQuantity) || (row.remainingQuantity !== null && row.totalQuantity - row.allocatedQuantity !== row.remainingQuantity)) {

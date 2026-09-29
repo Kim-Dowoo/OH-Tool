@@ -17,12 +17,12 @@ export async function parseOrganizationWorkbook(buffer: Buffer): Promise<ParseRe
   }
   for (let sourceRow = header.row + 1; sourceRow <= sheet.rowCount; sourceRow++) {
     const getCell = (name: string) => columnCell(sheet, sourceRow, header.columns, name);
-    if (HEADERS.every((name) => !cellText(getCell(name)))) continue;
     const formulaHeader = HEADERS.find((name) => isFormula(getCell(name)));
     if (formulaHeader) {
       issues.push({ code: "FORMULA_CELL", message: "Formula cells cannot be imported", severity: "error", sourceRow, column: formulaHeader });
       continue;
     }
+    if (HEADERS.every((name) => !cellText(getCell(name)))) continue;
     const missing = HEADERS.find((name) => !cellText(getCell(name)));
     if (missing) {
       issues.push({ code: "MISSING_VALUE", message: "A required organization field is blank", severity: "error", sourceRow, column: missing });
